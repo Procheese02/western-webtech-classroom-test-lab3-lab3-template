@@ -455,7 +455,153 @@
                     <div id="members-list" class="data-list"></div>
                 </div>
             </section>
-            
+          <section id="signups-section" class="content-section">
+                <h2>Sign-up Sheet Management</h2>
+                
+                <div class="form-container">
+                    <h3>Create Sign-up Sheet</h3>
+                    <form id="create-signup-form">
+                        <div class="form-group">
+                            <label for="signup-term-code">Term Code:</label>
+                            <input type="number" id="signup-term-code" min="1" max="9999" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="signup-section">Section:</label>
+                            <input type="number" id="signup-section" min="1" max="99" value="1">
+                        </div>
+                        <div class="form-group">
+                            <label for="assignment-name">Assignment Name:</label>
+                            <input type="text" id="assignment-name" maxlength="100" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="not-before">Not Before:</label>
+                            <input type="datetime-local" id="not-before" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="not-after">Not After:</label>
+                            <input type="datetime-local" id="not-after" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Create Sign-up Sheet</button>
+                    </form>
+                </div>
+
+                <div class="list-container">
+                    <h3>View Sign-up Sheets</h3>
+                    <div class="form-group">
+                        <label for="view-signup-term">Term Code:</label>
+                        <input type="number" id="view-signup-term" min="1" max="9999">
+                    </div>
+                    <div class="form-group">
+                        <label for="view-signup-section">Section:</label>
+                        <input type="number" id="view-signup-section" min="1" max="99" value="1">
+                    </div>
+                    <button id="view-signups" class="btn btn-secondary">View Sign-up Sheets</button>
+                    <div id="signups-list" class="data-list"></div>
+                </div>
+            </section>
+
+            <section id="slots-section" class="content-section">
+                <h2>Slot Management</h2>
+                
+                <div class="form-container">
+                    <h3>Add Slots to Sign-up Sheet</h3>
+                    <form id="add-slots-form">
+                        <div class="form-group">
+                            <label for="slot-signup-id">Sign-up Sheet ID:</label>
+                            <input type="number" id="slot-signup-id" min="1" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="slot-start">Start Time:</label>
+                            <input type="datetime-local" id="slot-start" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="slot-duration">Duration (minutes, 1-240):</label>
+                            <input type="number" id="slot-duration" min="1" max="240" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="num-slots">Number of Slots (1-99):</label>
+                            <input type="number" id="num-slots" min="1" max="99" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="max-members">Max Members per Slot (1-99):</label>
+                            <input type="number" id="max-members" min="1" max="99" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Add Slots</button>
+                    </form>
+                </div>
+
+                <div class="form-container">
+                    <h3>Sign Up for a Slot</h3>
+                    <form id="signup-slot-form">
+                        <div class="form-group">
+                            <label for="signup-sheet-id">Sign-up Sheet ID:</label>
+                            <input type="number" id="signup-sheet-id" min="1" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="signup-slot-id">Slot ID:</label>
+                            <input type="number" id="signup-slot-id" min="1" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="signup-member-id">Member ID:</label>
+                            <input type="text" id="signup-member-id" maxlength="8" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Sign Up</button>
+                    </form>
+                </div>
+
+                <div class="list-container">
+                    <h3>View Slots</h3>
+                    <div class="form-group">
+                        <label for="view-slots-signup-id">Sign-up Sheet ID:</label>
+                        <input type="number" id="view-slots-signup-id" min="1">
+                    </div>
+                    <button id="view-slots" class="btn btn-secondary">View Slots</button>
+                    <div id="slots-list" class="data-list"></div>
+                </div>
+            </section>
+
+            <section id="grading-section" class="content-section">
+                <h2>Grading Management</h2>
+                
+                <div class="form-container">
+                    <h3>Enter/Update Grade</h3>
+                    <form id="enter-grade-form">
+                        <div class="form-group">
+                            <label for="grade-member-id">Member ID:</label>
+                            <input type="text" id="grade-member-id" maxlength="8" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="grade-signup-id">Sign-up Sheet ID:</label>
+                            <input type="number" id="grade-signup-id" min="1" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="grade-value">Grade (0-999):</label>
+                            <input type="number" id="grade-value" min="0" max="999" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="grade-comment">Comment:</label>
+                            <textarea id="grade-comment" maxlength="500" rows="4"></textarea>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Submit Grade</button>
+                    </form>
+                </div>
+
+                <div class="list-container">
+                    <h3>View Members in Slot</h3>
+                    <div class="form-group">
+                        <label for="view-slot-members-id">Slot ID:</label>
+                        <input type="number" id="view-slot-members-id" min="1">
+                    </div>
+                    <button id="view-slot-members" class="btn btn-secondary">View Members</button>
+                    <div id="slot-members-list" class="data-list"></div>
+                </div>
+            </section>
+        </main>
+
+        <div id="message-area" class="message-area"></div>
+    </div>
+
+    <script src="lab3.js"></script>  
   </head>
   <body>
   </body>
