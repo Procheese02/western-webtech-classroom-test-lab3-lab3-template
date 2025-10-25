@@ -667,6 +667,127 @@ app.delete('/api/signupsheets/:sheetId/signup/:memberId', async (req, res) => {
         res.status(500).json({ error: 'Internal server error' });
     }
 });
+// ============ GRADING MANAGEMENT ============
+
+// Get members for a slot
+app.get('/api/slots/:id/members', async (req, res) => {
+    try {
+        const slotId = sanitizeNumber(req.params.id, 1, 999999);
+        
+        const signupsData = await readData(SIGNUPS_FILE);
+        
+        const slot = signupsData.slots.find(s => s.id === slotId);
+        if (!slot) {
+            return res.status(404).json({ error: 'Slot not found' });
+        }
+        
+        const sheet = signupsData.signupSheets.find(s => s.id === slot.signupSheetId);
+        
+        const coursesData = await readData(COURSES_FILE);
+        
+        const members = coursesData.members.filter(m => 
+            m.termCode === sheet.termCode && 
+            m.section === sheet.section &&
+            slot.signedUpMembers.includes(m.memberId)
+        );
+        
+        res.json({ 
+            slot,
+            members
+        });
+    } catch (error) {
+        console.error('Error getting slot members:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Enter or update grade
+app.post('/api/grades', async (req, res) => {
+    try {
+        const { memberId, signupSheetId, grade, comment } = req.body;
+        
+        if (!memberId || !signupSheetId || grade === undefined) {
+            return res.status(400).json({ error: 'Missing required parameters' });
+        }
+        
+        const sanitizedMemberId = sanitizeString(memberId, 8);
+        const sanitizedSheetId = sanitizeNumber(signupSheetId, 1, 999999);
+        const sanitizedGrade = sanitizeNumber(grade, 0, 999);
+        const sanitizedComment = sanitizeString(comment || '', 500);
+        
+        if (sanitizedMemberId.length !== 8) {
+            return res.status(400).json({ error: 'Invalid member ID format' });
+        }
+        
+        const data = await readData(GRADES_FILE);
+        
+        const existingGradeIndex = data.grades.findIndex(g => 
+            g.memberId === sanitizedMemberId && g.signupSheetId === sanitizedSheetId
+        );
+        
+        let originalGrade = undefined;
+        let existingComment = '';
+        
+        if (existingGradeIndex !== -1) {
+            originalGrade = data.grades[existingGradeIndex].grade;
+            existingComment = data.grades[existingGradeIndex].comment || '';
+            
+            data.grades[existingGradeIndex].grade = sanitizedGrade;
+            data.grades[existingGradeIndex].comment = existingComment 
+                ? `${existingComment}\n${sanitizedComment}` 
+                : sanitizedComment;
+            data.grades[existingGradeIndex].updatedAt = new Date().toISOString();
+        } else {
+            data.grades.push({
+                memberId: sanitizedMemberId,
+                signupSheetId: sanitizedSheetId,
+                grade: sanitizedGrade,
+                comment: sanitizedComment,
+                createdAt: new Date().toISOString()
+            });
+        }
+        
+        await writeData(GRADES_FILE, data);
+        
+        const response = { 
+            message: originalGrade !== undefined 
+                ? 'Grade updated successfully' 
+                : 'Grade entered successfully'
+        };
+        
+        if (originalGrade !== undefined) {
+            response.originalGrade = originalGrade;
+        }
+        
+        res.status(originalGrade !== undefined ? 200 : 201).json(response);
+    } catch (error) {
+        console.error('Error entering grade:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Get grade for a member
+app.get('/api/grades/:memberId/:signupSheetId', async (req, res) => {
+    try {
+        const memberId = sanitizeString(req.params.memberId, 8);
+        const signupSheetId = sanitizeNumber(req.params.signupSheetId, 1, 999999);
+        
+        const data = await readData(GRADES_FILE);
+        
+        const grade = data.grades.find(g => 
+            g.memberId === memberId && g.signupSheetId === signupSheetId
+        );
+        
+        if (!grade) {
+            return res.status(404).json({ error: 'Grade not found' });
+        }
+        
+        res.json(grade);
+    } catch (error) {
+        console.error('Error getting grade:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
 
 // Serve the main HTML file for any other route
 app.get('*', (req, res) => {
