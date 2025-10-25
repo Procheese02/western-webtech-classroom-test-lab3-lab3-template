@@ -429,6 +429,245 @@ app.get('/api/courses/:termCode/:section?/signupsheets', async (req, res) => {
     }
 });
 
+// ============ SLOT MANAGEMENT ============
+
+// Add slots to a signup sheet
+app.post('/api/signupsheets/:id/slots', async (req, res) => {
+    try {
+        const sheetId = sanitizeNumber(req.params.id, 1, 999999);
+        const { start, slotDuration, numSlots, maxMembers } = req.body;
+        
+        if (!start || !slotDuration || !numSlots || !maxMembers) {
+            return res.status(400).json({ error: 'Missing required parameters' });
+        }
+        
+        const sanitizedDuration = sanitizeNumber(slotDuration, 1, 240);
+        const sanitizedNumSlots = sanitizeNumber(numSlots, 1, 99);
+        const sanitizedMaxMembers = sanitizeNumber(maxMembers, 1, 99);
+        
+        if (!validateTimestamp(start)) {
+            return res.status(400).json({ error: 'Invalid timestamp format' });
+        }
+        
+        const data = await readData(SIGNUPS_FILE);
+        
+        const sheet = data.signupSheets.find(s => s.id === sheetId);
+        if (!sheet) {
+            return res.status(404).json({ error: 'Signup sheet not found' });
+        }
+        
+        const startDate = new Date(start);
+        const newSlots = [];
+        
+        for (let i = 0; i < sanitizedNumSlots; i++) {
+            const slotStart = new Date(startDate.getTime() + i * sanitizedDuration * 60000);
+            
+            const newSlot = {
+                id: data.nextSlotId,
+                signupSheetId: sheetId,
+                startTime: slotStart.toISOString(),
+                duration: sanitizedDuration,
+                maxMembers: sanitizedMaxMembers,
+                signedUpMembers: [],
+                createdAt: new Date().toISOString()
+            };
+            
+            data.slots.push(newSlot);
+            newSlots.push(newSlot);
+            data.nextSlotId++;
+        }
+        
+        await writeData(SIGNUPS_FILE, data);
+        
+        res.status(201).json({ 
+            message: 'Slots added successfully',
+            slots: newSlots
+        });
+    } catch (error) {
+        console.error('Error adding slots:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Get list of slots for a signup sheet
+app.get('/api/signupsheets/:id/slots', async (req, res) => {
+    try {
+        const sheetId = sanitizeNumber(req.params.id, 1, 999999);
+        
+        const data = await readData(SIGNUPS_FILE);
+        
+        const slots = data.slots.filter(s => s.signupSheetId === sheetId);
+        
+        res.json(slots);
+    } catch (error) {
+        console.error('Error getting slots:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Modify a slot
+app.put('/api/slots/:id', async (req, res) => {
+    try {
+        const slotId = sanitizeNumber(req.params.id, 1, 999999);
+        const { startTime, duration, maxMembers } = req.body;
+        
+        const data = await readData(SIGNUPS_FILE);
+        
+        const slot = data.slots.find(s => s.id === slotId);
+        if (!slot) {
+            return res.status(404).json({ error: 'Slot not found' });
+        }
+        
+        if (startTime && validateTimestamp(startTime)) {
+            slot.startTime = new Date(startTime).toISOString();
+        }
+        
+        if (duration !== undefined) {
+            slot.duration = sanitizeNumber(duration, 1, 240);
+        }
+        
+        if (maxMembers !== undefined) {
+            const newMax = sanitizeNumber(maxMembers, 1, 99);
+            if (slot.signedUpMembers.length > newMax) {
+                return res.status(400).json({ 
+                    error: 'Cannot reduce max members below current signup count',
+                    signedUpMembers: slot.signedUpMembers
+                });
+            }
+            slot.maxMembers = newMax;
+        }
+        
+        await writeData(SIGNUPS_FILE, data);
+        
+        const response = { 
+            message: 'Slot updated successfully',
+            slot
+        };
+        
+        if (slot.signedUpMembers.length > 0) {
+            response.signedUpMembers = slot.signedUpMembers;
+        }
+        
+        res.json(response);
+    } catch (error) {
+        console.error('Error modifying slot:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Sign up for a slot
+app.post('/api/signupsheets/:sheetId/signup', async (req, res) => {
+    try {
+        const sheetId = sanitizeNumber(req.params.sheetId, 1, 999999);
+        const { slotId, memberId } = req.body;
+        
+        if (!slotId || !memberId) {
+            return res.status(400).json({ error: 'Missing required parameters' });
+        }
+        
+        const sanitizedSlotId = sanitizeNumber(slotId, 1, 999999);
+        const sanitizedMemberId = sanitizeString(memberId, 8);
+        
+        if (sanitizedMemberId.length !== 8) {
+            return res.status(400).json({ error: 'Invalid member ID format' });
+        }
+        
+        const data = await readData(SIGNUPS_FILE);
+        
+        const sheet = data.signupSheets.find(s => s.id === sheetId);
+        if (!sheet) {
+            return res.status(404).json({ error: 'Signup sheet not found' });
+        }
+        
+        const slot = data.slots.find(s => s.id === sanitizedSlotId && s.signupSheetId === sheetId);
+        if (!slot) {
+            return res.status(404).json({ error: 'Slot not found in this signup sheet' });
+        }
+        
+        // Check time restrictions
+        const now = new Date();
+        const notBefore = new Date(sheet.notBefore);
+        const notAfter = new Date(sheet.notAfter);
+        
+        if (now < notBefore) {
+            return res.status(400).json({ error: 'Signup period has not started yet' });
+        }
+        
+        if (now > notAfter) {
+            return res.status(400).json({ error: 'Signup period has ended' });
+        }
+        
+        // Check if member already signed up
+        const alreadySignedUp = data.slots.some(s => 
+            s.signupSheetId === sheetId && s.signedUpMembers.includes(sanitizedMemberId)
+        );
+        
+        if (alreadySignedUp) {
+            return res.status(400).json({ error: 'Member has already signed up for this assignment' });
+        }
+        
+        // Check if slot is full
+        if (slot.signedUpMembers.length >= slot.maxMembers) {
+            return res.status(400).json({ error: 'This slot is full' });
+        }
+        
+        // Add member to slot
+        slot.signedUpMembers.push(sanitizedMemberId);
+        
+        // Record signup
+        data.signups.push({
+            signupSheetId: sheetId,
+            slotId: sanitizedSlotId,
+            memberId: sanitizedMemberId,
+            signedUpAt: new Date().toISOString()
+        });
+        
+        await writeData(SIGNUPS_FILE, data);
+        
+        res.status(201).json({ 
+            message: 'Successfully signed up for slot',
+            slot
+        });
+    } catch (error) {
+        console.error('Error signing up:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Delete a signup
+app.delete('/api/signupsheets/:sheetId/signup/:memberId', async (req, res) => {
+    try {
+        const sheetId = sanitizeNumber(req.params.sheetId, 1, 999999);
+        const memberId = sanitizeString(req.params.memberId, 8);
+        
+        const data = await readData(SIGNUPS_FILE);
+        
+        const slot = data.slots.find(s => 
+            s.signupSheetId === sheetId && s.signedUpMembers.includes(memberId)
+        );
+        
+        if (!slot) {
+            return res.status(404).json({ error: 'Signup not found' });
+        }
+        
+        slot.signedUpMembers = slot.signedUpMembers.filter(m => m !== memberId);
+        
+        data.signups = data.signups.filter(s => 
+            !(s.signupSheetId === sheetId && s.memberId === memberId)
+        );
+        
+        await writeData(SIGNUPS_FILE, data);
+        
+        res.json({ 
+            message: 'Signup removed successfully',
+            slot
+        });
+    } catch (error) {
+        console.error('Error deleting signup:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
 // Serve the main HTML file for any other route
 app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, '../frontend', 'index.html'));
