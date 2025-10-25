@@ -41,6 +41,9 @@ A RESTful API and web application for managing course sign-up sheets, student en
 2. Clone the repository:
 ```bash
 git clone git@github.com:Procheese02/western-webtech-classroom-test-lab3-lab3-template.git
+```
+and
+```bash
 cd backend
 ```
 
