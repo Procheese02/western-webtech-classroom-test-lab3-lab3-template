@@ -83,7 +83,7 @@ function validateTimestamp(timestamp) {
     return !isNaN(date.getTime());
 }
 
-// ============ COURSE MANAGEMENT ROUTES ============
+// ============ COURSE MANAGEMENT ============
 
 // Create a course
 app.post('/api/courses', async (req, res) => {
@@ -309,6 +309,122 @@ app.delete('/api/courses/:termCode/:section?/members', async (req, res) => {
         });
     } catch (error) {
         console.error('Error deleting members:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+// ============ SIGNUP SHEET MANAGEMENT ============
+
+// Create a signup sheet
+app.post('/api/signupsheets', async (req, res) => {
+    try {
+        const { termCode, section = 1, assignmentName, notBefore, notAfter } = req.body;
+        
+        if (!termCode || !assignmentName || !notBefore || !notAfter) {
+            return res.status(400).json({ error: 'Missing required parameters' });
+        }
+        
+        const sanitizedTermCode = sanitizeNumber(termCode, 1, 9999);
+        const sanitizedSection = sanitizeNumber(section, 1, 99, 1);
+        const sanitizedAssignment = sanitizeString(assignmentName, 100);
+        
+        if (sanitizedTermCode === 0) {
+            return res.status(400).json({ error: 'Invalid term code' });
+        }
+        
+        if (!sanitizedAssignment) {
+            return res.status(400).json({ error: 'Assignment name cannot be empty' });
+        }
+        
+        if (!validateTimestamp(notBefore) || !validateTimestamp(notAfter)) {
+            return res.status(400).json({ error: 'Invalid timestamp format' });
+        }
+        
+        const notBeforeDate = new Date(notBefore);
+        const notAfterDate = new Date(notAfter);
+        
+        if (notBeforeDate >= notAfterDate) {
+            return res.status(400).json({ error: 'Not-before must be earlier than not-after' });
+        }
+        
+        const coursesData = await readData(COURSES_FILE);
+        const courseExists = coursesData.courses.some(c => 
+            c.termCode === sanitizedTermCode && c.section === sanitizedSection
+        );
+        
+        if (!courseExists) {
+            return res.status(404).json({ 
+                error: `Course with term code ${sanitizedTermCode} and section ${sanitizedSection} does not exist` 
+            });
+        }
+        
+        const data = await readData(SIGNUPS_FILE);
+        
+        const newSheet = {
+            id: data.nextSheetId,
+            termCode: sanitizedTermCode,
+            section: sanitizedSection,
+            assignmentName: sanitizedAssignment,
+            notBefore: notBeforeDate.toISOString(),
+            notAfter: notAfterDate.toISOString(),
+            createdAt: new Date().toISOString()
+        };
+        
+        data.signupSheets.push(newSheet);
+        data.nextSheetId++;
+        
+        await writeData(SIGNUPS_FILE, data);
+        
+        res.status(201).json({ 
+            message: 'Signup sheet created successfully',
+            signupSheet: newSheet
+        });
+    } catch (error) {
+        console.error('Error creating signup sheet:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Delete a signup sheet
+app.delete('/api/signupsheets/:id', async (req, res) => {
+    try {
+        const sheetId = sanitizeNumber(req.params.id, 1, 999999);
+        
+        const data = await readData(SIGNUPS_FILE);
+        
+        const sheetIndex = data.signupSheets.findIndex(s => s.id === sheetId);
+        
+        if (sheetIndex === -1) {
+            return res.status(404).json({ error: 'Signup sheet not found' });
+        }
+        
+        data.signupSheets.splice(sheetIndex, 1);
+        data.slots = data.slots.filter(slot => slot.signupSheetId !== sheetId);
+        data.signups = data.signups.filter(signup => signup.signupSheetId !== sheetId);
+        
+        await writeData(SIGNUPS_FILE, data);
+        
+        res.json({ message: 'Signup sheet deleted successfully' });
+    } catch (error) {
+        console.error('Error deleting signup sheet:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Get list of signup sheets for a course
+app.get('/api/courses/:termCode/:section?/signupsheets', async (req, res) => {
+    try {
+        const termCode = sanitizeNumber(req.params.termCode, 1, 9999);
+        const section = sanitizeNumber(req.params.section, 1, 99, 1);
+        
+        const data = await readData(SIGNUPS_FILE);
+        
+        const sheets = data.signupSheets.filter(s => 
+            s.termCode === termCode && s.section === section
+        );
+        
+        res.json(sheets);
+    } catch (error) {
+        console.error('Error getting signup sheets:', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 });
