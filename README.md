@@ -44,7 +44,7 @@ git clone git@github.com:Procheese02/western-webtech-classroom-test-lab3-lab3-te
 ```
 and
 ```bash
-cd backend
+cd server
 ```
 
 3. Install server dependencies:
